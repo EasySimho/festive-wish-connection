@@ -1,5 +1,7 @@
 import { useState } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
+import * as z from "zod";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,29 +22,40 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/lib/supabase";
 
-interface WishFormData {
-  title: string;
-  description: string;
-  price?: number;
-}
+const wishFormSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  description: z.string().min(1, "Description is required"),
+  price: z.string().optional(),
+});
+
+type WishFormData = z.infer<typeof wishFormSchema>;
 
 export function AddWishDialog() {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
-  const form = useForm<WishFormData>();
+
+  const form = useForm<WishFormData>({
+    resolver: zodResolver(wishFormSchema),
+    defaultValues: {
+      title: "",
+      description: "",
+      price: "",
+    },
+  });
 
   const onSubmit = async (data: WishFormData) => {
     try {
-      const response = await fetch("/api/wishes", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
+      const user = await supabase.auth.getUser();
+      const { error } = await supabase.from("wishes").insert({
+        title: data.title,
+        description: data.description,
+        price: data.price ? parseFloat(data.price) : null,
+        user_id: user.data.user?.id,
       });
 
-      if (!response.ok) throw new Error("Failed to add wish");
+      if (error) throw error;
 
       toast({
         title: "Wish added!",
@@ -66,9 +79,9 @@ export function AddWishDialog() {
           <Plus className="mr-2 h-4 w-4" /> Add Wish
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px] bg-[#FEF7E4]">
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle className="text-[#1F2937]">Add a New Wish</DialogTitle>
+          <DialogTitle>Add a New Wish</DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -79,7 +92,7 @@ export function AddWishDialog() {
                 <FormItem>
                   <FormLabel>Title</FormLabel>
                   <FormControl>
-                    <Input {...field} className="bg-white" />
+                    <Input placeholder="Enter wish title..." {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -92,7 +105,10 @@ export function AddWishDialog() {
                 <FormItem>
                   <FormLabel>Description</FormLabel>
                   <FormControl>
-                    <Textarea {...field} className="bg-white" />
+                    <Textarea
+                      placeholder="Enter wish description..."
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -108,29 +124,17 @@ export function AddWishDialog() {
                     <Input
                       type="number"
                       step="0.01"
+                      placeholder="Enter price..."
                       {...field}
-                      className="bg-white"
                     />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            <div className="flex justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                className="bg-[#2F5233] hover:bg-[#2F5233]/90 text-white"
-              >
-                Add Wish
-              </Button>
-            </div>
+            <Button type="submit" className="w-full">
+              Add Wish
+            </Button>
           </form>
         </Form>
       </DialogContent>

@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Gift, Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/lib/supabase";
 
 interface WishListProps {
   viewMode: "mine" | "partner";
@@ -24,9 +25,12 @@ export function WishList({ viewMode }: WishListProps) {
   const { data: wishes, isLoading } = useQuery({
     queryKey: ["wishes", viewMode],
     queryFn: async () => {
-      const { data, error } = await fetch("/api/wishes").then((res) =>
-        res.json()
-      );
+      const { data, error } = await supabase
+        .from("wishes")
+        .select("*")
+        .eq(viewMode === "mine" ? "user_id" : "user_id_not", (await supabase.auth.getUser()).data.user?.id)
+        .order("created_at", { ascending: false });
+
       if (error) throw error;
       return data as Wish[];
     },
@@ -34,9 +38,13 @@ export function WishList({ viewMode }: WishListProps) {
 
   const handleClaimWish = async (wishId: string) => {
     try {
-      await fetch(`/api/wishes/${wishId}/claim`, {
-        method: "POST",
-      });
+      const { error } = await supabase
+        .from("wishes")
+        .update({ claimed: true })
+        .eq("id", wishId);
+
+      if (error) throw error;
+
       toast({
         title: "Wish claimed!",
         description: "The wish has been marked as claimed.",
